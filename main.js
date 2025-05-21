@@ -19,24 +19,23 @@ const conwayShaderCode = workgroupSize => /*wgsl*/ `
   }
 
   fn xy_to_index(x:u32, y:u32, gridSize:f32) -> i32 {
-    var rowSize: u32 = u32(gridSize + gridSize - 1);
-    // if x > rowSize || y > rowSize || abs(x + y) > u32(gridSize) {return -1;}
+    var rowSize:u32 = u32(gridSize + gridSize - 1);
 
     if x > rowSize {return -1;}
     if y > rowSize {return -1;}
     if abs(f32(x) - gridSize + 1 + f32(y) - gridSize + 1) >= gridSize {return -1;}
 
-    var i: i32 = i32(x * rowSize + y);
+    var i:i32 = i32(x * rowSize + y);
     return i;
   }
 
-  @group(0) @binding(0) var<storage, read_write> vertex: array<f32>;
-  @group(0) @binding(1) var<storage, read> grid: array<f32>;
-  @group(0) @binding(2) var<uniform> gridSize: f32;
-  @group(0) @binding(3) var<storage, read_write> out: array<f32>;
-  @group(0) @binding(4) var<uniform> tileSize: f32;
-  @group(0) @binding(5) var<uniform> screenSize: vec2<f32>;
-  @group(0) @binding(6) var<storage, read_write> vertexColors: array<vec4f>;
+  @group(0) @binding(0) var<storage, read_write> vertex: array<vec2f>;
+  @group(0) @binding(1) var<storage, read_write> vertexColors: array<vec4f>;
+  @group(0) @binding(2) var<storage, read_write> out: array<f32>;
+  @group(0) @binding(3) var<storage, read> grid: array<f32>;
+  @group(0) @binding(4) var<uniform> gridSize: f32;
+  @group(0) @binding(5) var<uniform> tileSize: f32;
+  @group(0) @binding(6) var<uniform> screenSize: vec2<f32>;
 
   @compute @workgroup_size(${workgroupSize}) fn conway(
     @builtin(global_invocation_id) global_invocation_id: vec3<u32>
@@ -84,61 +83,48 @@ const conwayShaderCode = workgroupSize => /*wgsl*/ `
     }
 
     var color = vec4f(0.192,0.184,0.09,1.0);
-    // var color = vec4f(0.0,0.0,0.0,1.0);
 
     if isAlive == 1 {
       color = vec4f(1.0,0.794,0.0,1.0);
     }
 
     if originIndex >= 0 {
-      var i = originIndex * 24;
+      var i = originIndex * 12;
       //tri 1
-      vertex[i] = p0.x;
-      vertex[i+1] = p0.y;
-      vertex[i+2] = p1.x;
-      vertex[i+3] = p1.y;
-      vertex[i+4] = p2.x;
-      vertex[i+5] = p2.y;
+      vertex[i] = p0;
+      vertex[i+1] = p1;
+      vertex[i+2] = p2;
 
-      vertexColors[i/2] = color;
-      vertexColors[(i+2)/2] = color;
-      vertexColors[(i+4)/2] = color;
+      vertexColors[i] = color;
+      vertexColors[i+1] = color;
+      vertexColors[i+2] = color;
 
       //tri 2
-      vertex[i+6] = p0.x;
-      vertex[i+7] = p0.y;
-      vertex[i+8] = p2.x;
-      vertex[i+9] = p2.y;
-      vertex[i+10] = p3.x;
-      vertex[i+11] = p3.y;
+      vertex[i+3] = p0;
+      vertex[i+4] = p2;
+      vertex[i+5] = p3;
 
-      vertexColors[(i+6)/2] = color;
-      vertexColors[(i+8)/2] = color;
-      vertexColors[(i+10)/2] = color;
+      vertexColors[i+3] = color;
+      vertexColors[i+4] = color;
+      vertexColors[i+5] = color;
 
       //tri 3
-      vertex[i+12] = p0.x;
-      vertex[i+13] = p0.y;
-      vertex[i+14] = p3.x;
-      vertex[i+15] = p3.y;
-      vertex[i+16] = p5.x;
-      vertex[i+17] = p5.y;
+      vertex[i+6] = p0;
+      vertex[i+7] = p3;
+      vertex[i+8] = p5;
 
-      vertexColors[(i+12)/2] = color;
-      vertexColors[(i+14)/2] = color;
-      vertexColors[(i+16)/2] = color;
+      vertexColors[i+6] = color;
+      vertexColors[i+7] = color;
+      vertexColors[i+8] = color;
 
       //tri 4
-      vertex[i+18] = p5.x;
-      vertex[i+19] = p5.y;
-      vertex[i+20] = p3.x;
-      vertex[i+21] = p3.y;
-      vertex[i+22] = p4.x;
-      vertex[i+23] = p4.y;
+      vertex[i+9] = p5;
+      vertex[i+10] = p3;
+      vertex[i+11] = p4;
 
-      vertexColors[(i+18)/2] = color;
-      vertexColors[(i+20)/2] = color;
-      vertexColors[(i+22)/2] = color;
+      vertexColors[i+9] = color;
+      vertexColors[i+10] = color;
+      vertexColors[i+11] = color;
     }
   }
 `;
@@ -186,7 +172,6 @@ for (let x = -gameSize + 1; x < gameSize; x++) {
   for (let y = -gameSize + 1; y < gameSize; y++) {
     if (Math.abs(x + y) < gameSize) {
       row.push(Math.random() < 0.9 ? 0 : 1);
-      // row.push(1);
     } else {
       row.push(0);
     }
@@ -228,14 +213,14 @@ const sleep = delay => new Promise(resolve => setTimeout(resolve, delay));
 
 let count = 0;
 
+const dispatchCount = [
+  Math.ceil((gameSize + gameSize - 1) / 8),
+  Math.ceil((gameSize + gameSize - 1) / 8),
+  1
+];
+const workgroupSize = [8, 8, 1];
 while (count < 100) {
   count++;
-  const dispatchCount = [
-    Math.ceil((gameSize + gameSize - 1) / 9),
-    Math.ceil((gameSize + gameSize - 1) / 9),
-    1
-  ];
-  const workgroupSize = [9, 9, 1];
 
   const conwayShaderModule = device.createShaderModule({
     label: 'conway shader module',
@@ -248,7 +233,7 @@ while (count < 100) {
   });
 
   const conwayComputePipeline = device.createComputePipeline({
-    label: 'Conway Compute Pipeline',
+    label: 'conway compute pipeline',
     layout: 'auto',
     compute: {
       module: conwayShaderModule
@@ -256,7 +241,7 @@ while (count < 100) {
   });
 
   const renderPipeline = device.createRenderPipeline({
-    label: 'vertex buffer pipeline',
+    label: 'render pipeline',
     layout: 'auto',
     vertex: {
       module: renderShaderModule
@@ -280,7 +265,7 @@ while (count < 100) {
   });
 
   const screenSizeBuffer = device.createBuffer({
-    labe: 'x scaler buffer',
+    labe: 'screen size buffer',
     size: 16,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
@@ -306,14 +291,14 @@ while (count < 100) {
 
   const vertexBuffer = device.createBuffer({
     label: 'vertex buffer vertices',
-    size: 24 * 4 * (gameSize + gameSize - 1) * (gameSize + gameSize - 1),
+    size: 12 * 8 * (gameSize + gameSize - 1) * (gameSize + gameSize - 1),
     usage:
       GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
   });
 
   const vertexColorBuffer = device.createBuffer({
     label: 'vertex buffer vertices',
-    size: 24 * 4 * (gameSize + gameSize - 1) * (gameSize + gameSize - 1) * 4,
+    size: 12 * 16 * (gameSize + gameSize - 1) * (gameSize + gameSize - 1),
     usage:
       GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
   });
@@ -332,17 +317,17 @@ while (count < 100) {
     layout: conwayComputePipeline.getBindGroupLayout(0),
     entries: [
       { binding: 0, resource: { buffer: vertexBuffer } },
-      { binding: 1, resource: { buffer: gameGridBuffer } },
-      { binding: 2, resource: { buffer: gameSizeBuffer } },
-      { binding: 3, resource: { buffer: outputBuffer } },
-      { binding: 4, resource: { buffer: tileSizeBuffer } },
-      { binding: 5, resource: { buffer: screenSizeBuffer } },
-      { binding: 6, resource: { buffer: vertexColorBuffer } }
+      { binding: 1, resource: { buffer: vertexColorBuffer } },
+      { binding: 2, resource: { buffer: outputBuffer } },
+      { binding: 3, resource: { buffer: gameGridBuffer } },
+      { binding: 4, resource: { buffer: gameSizeBuffer } },
+      { binding: 5, resource: { buffer: tileSizeBuffer } },
+      { binding: 6, resource: { buffer: screenSizeBuffer } }
     ]
   });
 
   const renderPassDescriptor = {
-    label: 'our basic canvas renderPass',
+    label: 'basic render pass',
     colorAttachments: [
       {
         clearValue: [0.803, 0.364, 0.0, 1.0],
@@ -391,7 +376,7 @@ while (count < 100) {
 
   renderPass.setPipeline(renderPipeline);
   renderPass.setBindGroup(0, renderBindGroup);
-  renderPass.draw(24 * (gameSize + gameSize - 1) * (gameSize + gameSize - 1));
+  renderPass.draw(12 * (gameSize + gameSize - 1) * (gameSize + gameSize - 1));
   renderPass.end();
 
   const commandBuffer = gameEncoder.finish();
